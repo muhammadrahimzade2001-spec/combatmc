@@ -29,7 +29,7 @@ const CONFIG = {
   MODES: {
     boxpvp: {
       name: '⚔️ BoxPvP',
-      ip: 'mc.combatmc.net',
+      ip: 'boxpvp.combatmc.net',
       version: '1.8 - 1.21',
       desc: 'Kutularda geçen hızlı tempolu PvP modu! Kit seç, savaş, kazan.',
       features: ['🎯 Kit sistemi', '🏆 Sıralama tablosu', '💎 VIP kitler', '⚡ Hızlı respawn'],
@@ -37,7 +37,7 @@ const CONFIG = {
     },
     boxmining: {
       name: '⛏️ BoxMining',
-      ip: 'mc.combatmc.net',
+      ip: 'boxmining.combatmc.net',
       version: '1.16.5',
       desc: 'Madencilik ve hayatta kalma odaklı mod. Kaynak topla, üs kur, rakiplerini ez!',
       features: ['🪨 Özel madencilik sistemi', '🏠 Üs kurma', '💰 Ekonomi sistemi', '🤝 Takım desteği'],
@@ -45,7 +45,7 @@ const CONFIG = {
     },
     mod: {
       name: '🗡️ Mod (Modded)',
-      ip: 'mc.combatmc.net',
+      ip: 'mod.combatmc.net',
       version: '1.16.5',
       desc: 'Forge modları ile güçlendirilmiş özel mod deneyimi!',
       features: ['⚗️ Özel modlar', '🔧 Forge 1.16.5', '🌍 Özel dünyalar', '🧪 Yeni itemlar'],
@@ -248,94 +248,31 @@ client.on('messageCreate', async (message) => {
       // ── !sunucu ────────────────────────────────────────────────────────────
       case 'sunucu': {
         const embed = new EmbedBuilder()
-          .setTitle('⚔️ CombatMC Sunucu Bilgileri')
+          .setTitle('⚔️ CombatMC — BoxPvP')
           .setColor(CONFIG.COLOR_PRIMARY)
-          .setDescription('Türkiye\'nin en iyi PvP Minecraft sunucusuna hoş geldin!\n\nAşağıdan oynamak istediğin modu seç:')
-          .addFields(
-            {
-              name: '⚔️ BoxPvP',
-              value: `\`${CONFIG.MODES.boxpvp.ip}\`\n📌 Sürüm: \`${CONFIG.MODES.boxpvp.version}\`\n${CONFIG.MODES.boxpvp.features.join(' · ')}`,
-              inline: false
-            },
-            {
-              name: '⛏️ BoxMining',
-              value: `\`${CONFIG.MODES.boxmining.ip}\`\n📌 Sürüm: \`${CONFIG.MODES.boxmining.version}\`\n${CONFIG.MODES.boxmining.features.join(' · ')}`,
-              inline: false
-            },
-            {
-              name: '🗡️ Mod (Modded)',
-              value: `\`${CONFIG.MODES.mod.ip}\`\n📌 Sürüm: \`${CONFIG.MODES.mod.version}\`\n${CONFIG.MODES.mod.features.join(' · ')}\n📦 ${CONFIG.MODES.mod.modpack}`,
-              inline: false
-            },
+          .setDescription(
+            '🔥 **Türkiye\'nin en iyi BoxPvP deneyimi seni bekliyor!**\n' +
+            'Rakiplerini ez, liderlik tablosuna çık, efsane ol!\n\n' +
+            '> *"Bir kez girdin mi çıkamazsın — CombatMC seni bağlar!"*'
           )
-          .setFooter({ text: 'CombatMC • !boxpvp | !boxmining | !mod' })
+          .addFields(
+            { name: '🌐 Sunucu IP', value: `\`\`\`${CONFIG.MODES.boxpvp.ip}\`\`\``, inline: false },
+            { name: '🎮 Desteklenen Sürümler', value: `\`${CONFIG.MODES.boxpvp.version}\``, inline: true },
+            { name: '⚔️ Mod', value: '`BoxPvP`', inline: true },
+            { name: '✨ Özellikler', value: CONFIG.MODES.boxpvp.features.join('\n'), inline: false },
+          )
+          .setFooter({ text: 'CombatMC • Savaş başlıyor!' })
           .setTimestamp();
 
         const row = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setLabel('⚔️ BoxPvP').setStyle(ButtonStyle.Danger).setCustomId('info_boxpvp'),
-          new ButtonBuilder().setLabel('⛏️ BoxMining').setStyle(ButtonStyle.Primary).setCustomId('info_boxmining'),
-          new ButtonBuilder().setLabel('🗡️ Mod').setStyle(ButtonStyle.Secondary).setCustomId('info_mod'),
-          new ButtonBuilder().setLabel('🎫 Destek').setStyle(ButtonStyle.Success).setCustomId('t_diger'),
+          new ButtonBuilder().setLabel('🎮 IP\'yi Gör').setStyle(ButtonStyle.Danger).setCustomId('info_boxpvp'),
+          new ButtonBuilder().setLabel('🎫 Destek').setStyle(ButtonStyle.Secondary).setCustomId('t_diger'),
         );
 
         await message.reply({ embeds: [embed], components: [row] });
         break;
       }
 
-      // ── !boxpvp ───────────────────────────────────────────────────────────
-      case 'boxpvp': {
-        const m = CONFIG.MODES.boxpvp;
-        const embed = new EmbedBuilder()
-          .setTitle(m.name)
-          .setDescription(m.desc)
-          .setColor(m.color)
-          .addFields(
-            { name: '🌐 IP Adresi', value: `\`${m.ip}\``, inline: true },
-            { name: '🎮 Sürüm', value: `\`${m.version}\``, inline: true },
-            { name: '✨ Özellikler', value: m.features.join('\n'), inline: false },
-          )
-          .setFooter({ text: 'CombatMC BoxPvP' })
-          .setTimestamp();
-        await message.reply({ embeds: [embed] });
-        break;
-      }
-
-      // ── !boxmining ────────────────────────────────────────────────────────
-      case 'boxmining': {
-        const m = CONFIG.MODES.boxmining;
-        const embed = new EmbedBuilder()
-          .setTitle(m.name)
-          .setDescription(m.desc)
-          .setColor(m.color)
-          .addFields(
-            { name: '🌐 IP Adresi', value: `\`${m.ip}\``, inline: true },
-            { name: '🎮 Sürüm', value: `\`${m.version}\``, inline: true },
-            { name: '✨ Özellikler', value: m.features.join('\n'), inline: false },
-          )
-          .setFooter({ text: 'CombatMC BoxMining' })
-          .setTimestamp();
-        await message.reply({ embeds: [embed] });
-        break;
-      }
-
-      // ── !mod ──────────────────────────────────────────────────────────────
-      case 'mod': {
-        const m = CONFIG.MODES.mod;
-        const embed = new EmbedBuilder()
-          .setTitle(m.name)
-          .setDescription(m.desc)
-          .setColor(m.color)
-          .addFields(
-            { name: '🌐 IP Adresi', value: `\`${m.ip}\``, inline: true },
-            { name: '🎮 Sürüm', value: `\`${m.version}\``, inline: true },
-            { name: '📦 Modpack', value: m.modpack, inline: false },
-            { name: '✨ Özellikler', value: m.features.join('\n'), inline: false },
-          )
-          .setFooter({ text: 'CombatMC Mod' })
-          .setTimestamp();
-        await message.reply({ embeds: [embed] });
-        break;
-      }
 
       // ── !ip ───────────────────────────────────────────────────────────────
       case 'ip': {
@@ -380,10 +317,10 @@ client.on('messageCreate', async (message) => {
           .setTitle('❓ CombatMC Komutları')
           .setColor(CONFIG.COLOR_INFO)
           .addFields(
-            { name: '🎮 Sunucu', value: '`!sunucu` `!boxpvp` `!boxmining` `!mod` `!ip` `!kurallar`' },
-            { name: '🎫 Destek', value: '`!ticket` `!ticket-kur` (admin)' },
-            { name: '🛡️ Moderasyon', value: '`!warn` `!uyarilar` `!uyarisil` `!mute` `!unmute` `!kick` `!ban` `!unban` `!temizle` `!yavaslat`' },
-            { name: '🎉 Diğer', value: '`!anket` `!zar` `!kullanici` `!sunucuinfo` `!duyuru` `!ping`' },
+            { name: '🎮 Sunucu', value: '`!sunucu` `!ip` `!kurallar`' },
+            { name: '🎫 Destek', value: '`!ticket-kur` (sadece admin — destek kanalına GUI menü kurar)' },
+            { name: '🛡️ Moderasyon', value: '`!warn` `!uyarilar` `!uyarisil`\n`!mute` `!unmute`\n`!kick` `!ban` `!unban`\n`!temizle` `!yavaslat`' },
+            { name: '🎉 Diğer', value: '`!anket` `!zar` `!kullanici` `!duyuru` `!ping`' },
           )
           .setFooter({ text: `Prefix: ${CONFIG.PREFIX}` })
           .setTimestamp();
@@ -403,30 +340,6 @@ client.on('messageCreate', async (message) => {
         break;
       }
 
-      // ── !ticket ───────────────────────────────────────────────────────────
-      case 'ticket': {
-        const row = new ActionRowBuilder().addComponents(
-          new StringSelectMenuBuilder()
-            .setCustomId('ticket_kategori_select')
-            .setPlaceholder('Talep kategorisi seç...')
-            .addOptions([
-              { label: '⚔️ Hile Şikayeti', value: 't_hile' },
-              { label: '🚫 Ban İtirazı', value: 't_ban' },
-              { label: '🔇 Mute İtirazı', value: 't_mute' },
-              { label: '💰 Ödeme Sorunu', value: 't_odeme' },
-              { label: '🐛 Bug Bildirimi', value: 't_bug' },
-              { label: '📋 Yetkili Başvurusu', value: 't_basvuru' },
-              { label: '❓ Diğer', value: 't_diger' },
-            ])
-        );
-        const m = await message.reply({
-          embeds: [makeEmbed('🎫 Destek Talebi', 'Kategori seç, ticket açılsın!', CONFIG.COLOR_INFO)],
-          components: [row]
-        });
-        // 60 saniye sonra menüyü kaldır
-        setTimeout(() => m.edit({ components: [] }).catch(() => {}), 60000);
-        break;
-      }
 
       // ── !warn ─────────────────────────────────────────────────────────────
       case 'warn': {
@@ -575,25 +488,6 @@ client.on('messageCreate', async (message) => {
         break;
       }
 
-      // ── !sunucuinfo ───────────────────────────────────────────────────────
-      case 'sunucuinfo': {
-        const g = message.guild;
-        const embed = new EmbedBuilder()
-          .setTitle(`🏰 ${g.name}`)
-          .setThumbnail(g.iconURL())
-          .setColor(CONFIG.COLOR_INFO)
-          .addFields(
-            { name: '👑 Kurucu', value: `<@${g.ownerId}>`, inline: true },
-            { name: '👥 Üyeler', value: `${g.memberCount}`, inline: true },
-            { name: '📅 Oluşturulma', value: `<t:${Math.floor(g.createdTimestamp / 1000)}:R>`, inline: true },
-            { name: '💬 Kanallar', value: `${g.channels.cache.size}`, inline: true },
-            { name: '🎭 Roller', value: `${g.roles.cache.size}`, inline: true },
-            { name: '😀 Emojiler', value: `${g.emojis.cache.size}`, inline: true },
-          )
-          .setTimestamp();
-        await message.reply({ embeds: [embed] });
-        break;
-      }
 
       // ── !anket ────────────────────────────────────────────────────────────
       case 'anket': {
@@ -675,16 +569,6 @@ async function handleButton(i) {
       await i.reply({ embeds: [new EmbedBuilder().setTitle(m.name).setDescription(m.desc).setColor(m.color).addFields({ name: '🌐 IP', value: `\`${m.ip}\``, inline: true }, { name: '🎮 Sürüm', value: `\`${m.version}\``, inline: true }, { name: '✨ Özellikler', value: m.features.join('\n') })], ephemeral: true });
       break;
     }
-    case 'info_boxmining': {
-      const m = CONFIG.MODES.boxmining;
-      await i.reply({ embeds: [new EmbedBuilder().setTitle(m.name).setDescription(m.desc).setColor(m.color).addFields({ name: '🌐 IP', value: `\`${m.ip}\``, inline: true }, { name: '🎮 Sürüm', value: `\`${m.version}\``, inline: true }, { name: '✨ Özellikler', value: m.features.join('\n') })], ephemeral: true });
-      break;
-    }
-    case 'info_mod': {
-      const m = CONFIG.MODES.mod;
-      await i.reply({ embeds: [new EmbedBuilder().setTitle(m.name).setDescription(m.desc).setColor(m.color).addFields({ name: '🌐 IP', value: `\`${m.ip}\``, inline: true }, { name: '🎮 Sürüm', value: `\`${m.version}\``, inline: true }, { name: '📦 Modpack', value: m.modpack }, { name: '✨ Özellikler', value: m.features.join('\n') })], ephemeral: true });
-      break;
-    }
   }
 }
 
@@ -764,7 +648,7 @@ async function showBasvuruModal(i) {
 
 // ─── MEMBER JOIN ──────────────────────────────────────────────────────────────
 client.on('guildMemberAdd', async (member) => {
-  const welcomeChannelId = process.env.WELCOME_CHANNEL_ID;
+  const welcomeChannelId = process.env.1369271943475495004;
   if (!welcomeChannelId) return;
   const channel = member.guild.channels.cache.get(welcomeChannelId);
   if (!channel) return;
