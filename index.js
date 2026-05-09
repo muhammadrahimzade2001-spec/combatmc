@@ -29,15 +29,15 @@ const CONFIG = {
   MODES: {
     boxpvp: {
       name: '⚔️ BoxPvP',
-      ip: 'mc.combatmc.net',
-      version: '1.16.5 - 1.21',
+      ip: 'boxpvp.combatmc.net',
+      version: '1.8 - 1.21',
       desc: 'Kutularda geçen hızlı tempolu PvP modu! Kit seç, savaş, kazan.',
       features: ['🎯 Kit sistemi', '🏆 Sıralama tablosu', '💎 VIP kitler', '⚡ Hızlı respawn'],
       color: 0xFF4444,
     },
     boxmining: {
       name: '⛏️ BoxMining',
-      ip: 'mc.combatmc.net',
+      ip: 'boxmining.combatmc.net',
       version: '1.16.5',
       desc: 'Madencilik ve hayatta kalma odaklı mod. Kaynak topla, üs kur, rakiplerini ez!',
       features: ['🪨 Özel madencilik sistemi', '🏠 Üs kurma', '💰 Ekonomi sistemi', '🤝 Takım desteği'],
@@ -45,7 +45,7 @@ const CONFIG = {
     },
     mod: {
       name: '🗡️ Mod (Modded)',
-      ip: 'mc.combatmc.net',
+      ip: 'mod.combatmc.net',
       version: '1.16.5',
       desc: 'Forge modları ile güçlendirilmiş özel mod deneyimi!',
       features: ['⚗️ Özel modlar', '🔧 Forge 1.16.5', '🌍 Özel dünyalar', '🧪 Yeni itemlar'],
@@ -274,22 +274,6 @@ client.on('messageCreate', async (message) => {
       }
 
 
-      // ── !ip ───────────────────────────────────────────────────────────────
-      case 'ip': {
-        await message.reply({
-          embeds: [new EmbedBuilder()
-            .setTitle('🌐 CombatMC IP Adresleri')
-            .setColor(CONFIG.COLOR_INFO)
-            .addFields(
-              { name: '⚔️ BoxPvP', value: `\`${CONFIG.MODES.boxpvp.ip}\` — ${CONFIG.MODES.boxpvp.version}`, inline: false },
-              { name: '⛏️ BoxMining', value: `\`${CONFIG.MODES.boxmining.ip}\` — ${CONFIG.MODES.boxmining.version}`, inline: false },
-              { name: '🗡️ Mod', value: `\`${CONFIG.MODES.mod.ip}\` — ${CONFIG.MODES.mod.version}`, inline: false },
-            )
-            .setTimestamp()
-          ]
-        });
-        break;
-      }
 
       // ── !kurallar ─────────────────────────────────────────────────────────
       case 'kurallar': {
@@ -317,7 +301,7 @@ client.on('messageCreate', async (message) => {
           .setTitle('❓ CombatMC Komutları')
           .setColor(CONFIG.COLOR_INFO)
           .addFields(
-            { name: '🎮 Sunucu', value: '`!sunucu` `!ip` `!kurallar`' },
+            { name: '🎮 Sunucu', value: '`!sunucu` `!kurallar`' },
             { name: '🎫 Destek', value: '`!ticket-kur` (sadece admin — destek kanalına GUI menü kurar)' },
             { name: '🛡️ Moderasyon', value: '`!warn` `!uyarilar` `!uyarisil`\n`!mute` `!unmute`\n`!kick` `!ban` `!unban`\n`!temizle` `!yavaslat`' },
             { name: '🎉 Diğer', value: '`!anket` `!zar` `!kullanici` `!duyuru` `!ping`' },
@@ -648,7 +632,7 @@ async function showBasvuruModal(i) {
 
 // ─── MEMBER JOIN ──────────────────────────────────────────────────────────────
 client.on('guildMemberAdd', async (member) => {
-  const welcomeChannelId = process.env.WELCOME_CHANEL_ID;
+  const welcomeChannelId = process.env.WELCOME_CHANNEL_ID;
   if (!welcomeChannelId) return;
   const channel = member.guild.channels.cache.get(welcomeChannelId);
   if (!channel) return;
