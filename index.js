@@ -37,7 +37,7 @@ const CONFIG = {
     },
     boxmining: {
       name: '⛏️ BoxMining',
-      ip: 'boxmining.combatmc.net',
+      ip: 'mc.combatmc.net',
       version: '1.16.5',
       desc: 'Madencilik ve hayatta kalma odaklı mod. Kaynak topla, üs kur, rakiplerini ez!',
       features: ['🪨 Özel madencilik sistemi', '🏠 Üs kurma', '💰 Ekonomi sistemi', '🤝 Takım desteği'],
@@ -45,7 +45,7 @@ const CONFIG = {
     },
     mod: {
       name: '🗡️ Mod (Modded)',
-      ip: 'mod.combatmc.net',
+      ip: 'mc.combatmc.net',
       version: '1.16.5',
       desc: 'Forge modları ile güçlendirilmiş özel mod deneyimi!',
       features: ['⚗️ Özel modlar', '🔧 Forge 1.16.5', '🌍 Özel dünyalar', '🧪 Yeni itemlar'],
