@@ -30,7 +30,7 @@ const CONFIG = {
     boxpvp: {
       name: '⚔️ BoxPvP',
       ip: 'mc.combatmc.net',
-      version: '1.16.5 - 1.21',
+      version: '1.8 - 1.21',
       desc: 'Kutularda geçen hızlı tempolu PvP modu! Kit seç, savaş, kazan.',
       features: ['🎯 Kit sistemi', '🏆 Sıralama tablosu', '💎 VIP kitler', '⚡ Hızlı respawn'],
       color: 0xFF4444,
@@ -638,14 +638,51 @@ client.on('guildMemberAdd', async (member) => {
   if (!channel) return;
 
   const embed = new EmbedBuilder()
-    .setTitle('⚔️ CombatMC\'ye Hoş Geldin!')
-    .setDescription(`${member} sunucumuza katıldı!\n\n**⚔️ BoxPvP:** \`${CONFIG.MODES.boxpvp.ip}\`\n**⛏️ BoxMining:** \`${CONFIG.MODES.boxmining.ip}\`\n**🗡️ Mod:** \`${CONFIG.MODES.mod.ip}\`\n\n**📜 Kurallar:** \`!kurallar\`\n**🎫 Destek:** \`!ticket\``)
+    .setAuthor({
+      name: '🎉 Yeni Bir Üye Katıldı!',
+      iconURL: member.user.displayAvatarURL({ size: 64 }),
+    })
+    .setDescription(
+      `**<@${member.id}>** Aramıza Katılarak Sunucumuzun Gelişmesine Yardımcı Oldu Hoşgeldin!\n\n` +
+      `📜 Kuralları okumak için \`!kurallar\` yaz\n` +
+      `🎫 Yardım için destek kanalından ticket aç`
+    )
+    .setThumbnail(member.user.displayAvatarURL({ size: 256 }))
     .setColor(CONFIG.COLOR_SUCCESS)
-    .setThumbnail(member.user.displayAvatarURL())
-    .setFooter({ text: `${member.guild.name} • Üye #${member.guild.memberCount}` })
+    .addFields(
+      { name: '🌿 Sunucu Mevcut', value: `${member.guild.memberCount}`, inline: true },
+      { name: '📅 Hesap Tarihi', value: `<t:${Math.floor(member.user.createdTimestamp / 1000)}:R>`, inline: true },
+    )
+    .setFooter({ text: `${member.guild.name}` })
     .setTimestamp();
 
-  await channel.send({ content: `${member}`, embeds: [embed] }).catch(() => {});
+  await channel.send({ embeds: [embed] }).catch(() => {});
+});
+
+// ─── MEMBER LEAVE ─────────────────────────────────────────────────────────────
+client.on('guildMemberRemove', async (member) => {
+  const welcomeChannelId = process.env.WELCOME_CHANNEL_ID;
+  if (!welcomeChannelId) return;
+  const channel = member.guild.channels.cache.get(welcomeChannelId);
+  if (!channel) return;
+
+  const embed = new EmbedBuilder()
+    .setAuthor({
+      name: '👋 Bir Üye Ayrıldı',
+      iconURL: member.user.displayAvatarURL({ size: 64 }),
+    })
+    .setDescription(
+      `**<@${member.id}>** Aramızdan Ayrıldı Umarım Tekrar Görüşürüz Bizleri Unutma!`
+    )
+    .setThumbnail(member.user.displayAvatarURL({ size: 256 }))
+    .setColor(CONFIG.COLOR_PRIMARY)
+    .addFields(
+      { name: '🌿 Sunucu Mevcut', value: `${member.guild.memberCount}`, inline: true },
+    )
+    .setFooter({ text: `${member.guild.name}` })
+    .setTimestamp();
+
+  await channel.send({ embeds: [embed] }).catch(() => {});
 });
 
 // ─── ERROR HANDLING ───────────────────────────────────────────────────────────
