@@ -29,15 +29,15 @@ const CONFIG = {
   MODES: {
     boxpvp: {
       name: '⚔️ BoxPvP',
-      ip: 'boxpvp.combatmc.net',
-      version: '1.8 - 1.21',
+      ip: 'mc.combatmc.net',
+      version: '1.16.5 - 1.21',
       desc: 'Kutularda geçen hızlı tempolu PvP modu! Kit seç, savaş, kazan.',
       features: ['🎯 Kit sistemi', '🏆 Sıralama tablosu', '💎 VIP kitler', '⚡ Hızlı respawn'],
       color: 0xFF4444,
     },
     boxmining: {
       name: '⛏️ BoxMining',
-      ip: 'boxmining.combatmc.net',
+      ip: 'mc.combatmc.net',
       version: '1.16.5',
       desc: 'Madencilik ve hayatta kalma odaklı mod. Kaynak topla, üs kur, rakiplerini ez!',
       features: ['🪨 Özel madencilik sistemi', '🏠 Üs kurma', '💰 Ekonomi sistemi', '🤝 Takım desteği'],
@@ -45,7 +45,7 @@ const CONFIG = {
     },
     mod: {
       name: '🗡️ Mod (Modded)',
-      ip: 'mod.combatmc.net',
+      ip: 'mc.combatmc.net',
       version: '1.16.5',
       desc: 'Forge modları ile güçlendirilmiş özel mod deneyimi!',
       features: ['⚗️ Özel modlar', '🔧 Forge 1.16.5', '🌍 Özel dünyalar', '🧪 Yeni itemlar'],
