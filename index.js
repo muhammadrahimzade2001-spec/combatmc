@@ -29,8 +29,8 @@ const CONFIG = {
   MODES: {
     boxpvp: {
       name: '⚔️ BoxPvP',
-      ip: 'boxpvp.combatmc.net',
-      version: '1.8 - 1.21',
+      ip: 'mc.combatmc.net',
+      version: '1.16.5 - 1.21',
       desc: 'Kutularda geçen hızlı tempolu PvP modu! Kit seç, savaş, kazan.',
       features: ['🎯 Kit sistemi', '🏆 Sıralama tablosu', '💎 VIP kitler', '⚡ Hızlı respawn'],
       color: 0xFF4444,
