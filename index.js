@@ -648,7 +648,7 @@ async function showBasvuruModal(i) {
 
 // ─── MEMBER JOIN ──────────────────────────────────────────────────────────────
 client.on('guildMemberAdd', async (member) => {
-  const welcomeChannelId = process.env.1369271943475495004;
+  const welcomeChannelId = process.env.WELCOME_CHANEL_ID;
   if (!welcomeChannelId) return;
   const channel = member.guild.channels.cache.get(welcomeChannelId);
   if (!channel) return;
