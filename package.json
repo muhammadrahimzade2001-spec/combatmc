@@ -1,28 +1,20 @@
 {
-  "name": "combatmc-discord-bot",
+  "name": "combatmc-bot",
   "version": "1.0.0",
-  "description": "CombatMC Discord Bot - PvP Minecraft sunucusu için moderasyon ve yardımcı bot",
+  "description": "CombatMC Discord Botu — mc.combatmc.net",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js"
   },
   "dependencies": {
-    "discord.js": "^14.15.3"
+    "discord.js": "^14.16.3",
+    "dotenv": "^16.4.5"
   },
   "devDependencies": {
     "nodemon": "^3.1.4"
   },
   "engines": {
-    "node": ">=18.0.0"
-  },
-  "keywords": [
-    "discord",
-    "bot",
-    "minecraft",
-    "combatmc",
-    "pvp"
-  ],
-  "author": "CombatMC",
-  "license": "ISC"
+    "node": ">=16.9.0"
+  }
 }
