@@ -1,19 +1,14 @@
 {
   "name": "combatmc-bot",
   "version": "1.0.0",
-  "description": "CombatMC Discord Botu — mc.combatmc.net",
+  "description": "CombatMC Discord Bot",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js",
-    "dev": "nodemon index.js"
+    "start": "node index.js"
   },
   "dependencies": {
-   "discord.js": "13.17.1"
-
+    "discord.js": "14.14.1",
     "dotenv": "^16.4.5"
-  },
-  "devDependencies": {
-    "nodemon": "^3.1.4"
   },
   "engines": {
     "node": ">=16.9.0"
