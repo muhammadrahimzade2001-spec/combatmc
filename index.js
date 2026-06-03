@@ -35,7 +35,7 @@ const config = {
     info: 0x3498db,
   },
   channels: {
-    ticketCategory: "TİCKET_KATEGORİ_ID",   // Ticket kategorisi
+    ticketCategory: "1404955382216130700",   // Ticket kategorisi
     ticketLog: "TİCKET_LOG_KANAL_ID",         // Ticket log kanalı
     duyuru: "DUYURU_KANAL_ID",               // Duyuru kanalı
   },
