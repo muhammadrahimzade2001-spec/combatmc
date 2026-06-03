@@ -7,8 +7,9 @@
     "start": "node index.js"
   },
   "dependencies": {
-    "discord.js": "13.17.1",
-    "dotenv": "16.4.5"
+    "discord.js": "^14.14.1",
+    "dotenv": "16.4.5",
+    "gamedig": "^5.0.0"
   },
   "engines": {
     "node": "18.x"
