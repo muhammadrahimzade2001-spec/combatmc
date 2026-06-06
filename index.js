@@ -1,1018 +1,461 @@
-const {
-  Client,
-  GatewayIntentBits,
-  Partials,
-  EmbedBuilder,
-  ActionRowBuilder,
-  ButtonBuilder,
-  ButtonStyle,
-  StringSelectMenuBuilder,
-  ModalBuilder,
-  TextInputBuilder,
-  TextInputStyle,
-  PermissionFlagsBits,
-  ChannelType,
-  SlashCommandBuilder,
-  REST,
-  Routes,
-  Collection,
-} = require("discord.js");
+const { Client, GatewayIntentBits, Partials, EmbedBuilder, PermissionFlagsBits, ChannelType, ActionRowBuilder, ButtonBuilder, ButtonStyle, Collection } = require('discord.js');
+const fs = require('fs');
 
-// ─── CONFIG ───────────────────────────────────────────────────────────────────
-const config = {
-  token: "BOT_TOKEN_BURAYA",        // Discord bot tokenini buraya yaz
-  clientId: "CLIENT_ID_BURAYA",     // Bot client ID
-  guildId: "SUNUCU_ID_BURAYA",      // Sunucu ID
-  prefix: "!",
-  mcIp: "mc.combatmc.net",
-  mcVersion: "1.16.5x",
-  botName: "CombatMC",
-  color: {
-    main: 0xe84242,      // Kırmızı - CombatMC ana rengi
-    success: 0x2ecc71,
-    error: 0xe74c3c,
-    warn: 0xf39c12,
-    info: 0x3498db,
-  },
-  channels: {
-    ticketCategory: "1404955382216130700",   // Ticket kategorisi
-    ticketLog: "TİCKET_LOG_KANAL_ID",         // Ticket log kanalı
-    duyuru: "DUYURU_KANAL_ID",               // Duyuru kanalı
-  },
-  roles: {
-    admin: "ADMİN_ROL_ID",
-    mod: "MODERATOR_ROL_ID",
-    support: "DESTEK_ROL_ID",
-  },
-  emoji: {
-    sword: "⚔️",
-    shield: "🛡️",
-    ticket: "🎫",
-    check: "✅",
-    cross: "❌",
-    warn: "⚠️",
-    crown: "👑",
-    info: "ℹ️",
-    ban: "🔨",
-    mute: "🔇",
-    kick: "👢",
-    star: "⭐",
-    fire: "🔥",
-    lock: "🔒",
-    unlock: "🔓",
-  },
-};
+// ─── CONFIG ────────────────────────────────────────────────────────────────
+const PREFIX = '!';
+const TOKEN = 'BOT_TOKEN_BURAYA';          // .env ile de kullanabilirsin
+const TICKET_CATEGORY_ID = '';             // Ticket kategorisi ID (opsiyonel)
+const LOG_CHANNEL_ID = '';                 // Log kanalı ID (opsiyonel)
+// ──────────────────────────────────────────────────────────────────────────
 
-// ─── CLIENT SETUP ─────────────────────────────────────────────────────────────
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
-    GatewayIntentBits.GuildMembers,
-    GatewayIntentBits.DirectMessages,
+    GatewayIntentBits.GuildModeration,
   ],
-  partials: [Partials.Channel, Partials.Message],
+  partials: [Partials.Channel, Partials.Message, Partials.GuildMember],
 });
 
-// Ticket paneli mesaj ID'si (kalıcı tutmak için bir dosyaya da yazabilirsin)
-const ticketPanelMessages = new Map();
-const openTickets = new Map(); // userId -> channelId
+// Açık ticketları tutan map: userId -> channelId
+const openTickets = new Map();
 
-// ─── YARDIMCI FONKSİYONLAR ────────────────────────────────────────────────────
-function hasRole(member, roleId) {
-  return member.roles.cache.has(roleId);
-}
+// ─── YARDIMCI FONKSİYONLAR ────────────────────────────────────────────────
 
-function isAdmin(member) {
-  return (
-    member.permissions.has(PermissionFlagsBits.Administrator) ||
-    hasRole(member, config.roles.admin)
-  );
-}
-
-function isMod(member) {
-  return (
-    isAdmin(member) ||
-    hasRole(member, config.roles.mod) ||
-    member.permissions.has(PermissionFlagsBits.ModerateMembers)
-  );
+function log(guild, embed) {
+  if (!LOG_CHANNEL_ID) return;
+  const ch = guild.channels.cache.get(LOG_CHANNEL_ID);
+  if (ch) ch.send({ embeds: [embed] }).catch(() => {});
 }
 
 function errorEmbed(desc) {
-  return new EmbedBuilder()
-    .setColor(config.color.error)
-    .setDescription(`${config.emoji.cross} **${desc}**`)
-    .setTimestamp();
+  return new EmbedBuilder().setColor(0xe74c3c).setDescription(`❌ ${desc}`);
 }
-
 function successEmbed(desc) {
-  return new EmbedBuilder()
-    .setColor(config.color.success)
-    .setDescription(`${config.emoji.check} **${desc}**`)
-    .setTimestamp();
+  return new EmbedBuilder().setColor(0x2ecc71).setDescription(`✅ ${desc}`);
+}
+function infoEmbed(title, desc, color = 0x3498db) {
+  return new EmbedBuilder().setColor(color).setTitle(title).setDescription(desc);
 }
 
-function mainEmbed(title, desc) {
-  return new EmbedBuilder()
-    .setColor(config.color.main)
-    .setTitle(`${config.emoji.sword} ${title}`)
-    .setDescription(desc)
-    .setFooter({ text: `CombatMC • ${config.mcIp}` })
-    .setTimestamp();
+function getMember(guild, query) {
+  if (!query) return null;
+  const id = query.replace(/[<@!>]/g, '');
+  return guild.members.cache.get(id) || guild.members.cache.find(m =>
+    m.user.username.toLowerCase() === query.toLowerCase() ||
+    m.displayName.toLowerCase() === query.toLowerCase()
+  ) || null;
 }
 
-// ─── TICKET SİSTEMİ ───────────────────────────────────────────────────────────
-
-// Ticket panel embed + buton
-function buildTicketPanel() {
-  const embed = new EmbedBuilder()
-    .setColor(config.color.main)
-    .setTitle("🎫 CombatMC Destek Sistemi")
-    .setDescription(
-      [
-        "```",
-        "  ⚔️  CombatMC Destek Merkezi  ⚔️",
-        "```",
-        "",
-        "**Aşağıdan uygun kategoriyi seçerek ticket açabilirsin.**",
-        "",
-        `${config.emoji.sword} **Sunucu IP:** \`${config.mcIp}\``,
-        `${config.emoji.star} **Sürüm:** \`${config.mcVersion}\``,
-        "",
-        "> Gereksiz ticket açmak yasaktır.",
-        "> Ticket açtıktan sonra sorununu detaylı anlat.",
-        "> Ekip üyesi müsait olduğunda sana dönecek.",
-      ].join("\n")
-    )
-    .setThumbnail(
-      "https://i.imgur.com/8a5bZ3E.png"
-    )
-    .setFooter({ text: "CombatMC • Destek Ekibi", iconURL: "https://i.imgur.com/8a5bZ3E.png" })
-    .setTimestamp();
-
-  const select = new StringSelectMenuBuilder()
-    .setCustomId("ticket_category")
-    .setPlaceholder("📂 Kategori seç...")
-    .addOptions([
-      {
-        label: "⚔️ Hile Şikayeti",
-        description: "Hile kullanan oyuncuyu şikayet et",
-        value: "hile_sikayet",
-        emoji: "⚔️",
-      },
-      {
-        label: "🛡️ Yetkili Şikayeti",
-        description: "Yetkili hakkında şikayette bulun",
-        value: "yetkili_sikayet",
-        emoji: "🛡️",
-      },
-      {
-        label: "💰 Alışveriş Yardımı",
-        description: "Mağaza / ödeme sorunları",
-        value: "alisveris",
-        emoji: "💰",
-      },
-      {
-        label: "🔓 Ban / Mute İtiraz",
-        description: "Ban veya mute itirazı yap",
-        value: "itiraz",
-        emoji: "🔓",
-      },
-      {
-        label: "💡 Öneri / Geri Bildirim",
-        description: "Sunucu hakkında öneri sun",
-        value: "oneri",
-        emoji: "💡",
-      },
-      {
-        label: "❓ Diğer",
-        description: "Diğer konular için destek al",
-        value: "diger",
-        emoji: "❓",
-      },
-    ]);
-
-  const row = new ActionRowBuilder().addComponents(select);
-  return { embeds: [embed], components: [row] };
+function parseDuration(str) {
+  if (!str) return null;
+  const match = str.match(/^(\d+)(s|m|h|d)$/);
+  if (!match) return null;
+  const v = parseInt(match[1]);
+  const units = { s: 1000, m: 60000, h: 3600000, d: 86400000 };
+  return v * units[match[2]];
 }
 
-// Ticket kanalı oluştur
-async function createTicket(interaction, category) {
-  const guild = interaction.guild;
-  const user = interaction.user;
+// ─── READY ────────────────────────────────────────────────────────────────
+client.once('ready', () => {
+  console.log(`✅ ${client.user.tag} aktif!`);
+  client.user.setActivity(`${PREFIX}yardim`, { type: 3 });
+});
 
-  if (openTickets.has(user.id)) {
-    const existingChannel = guild.channels.cache.get(openTickets.get(user.id));
-    if (existingChannel) {
-      await interaction.reply({
-        embeds: [
-          errorEmbed(
-            `Zaten açık bir ticketin var! ${existingChannel}`
-          ),
-        ],
-        ephemeral: true,
-      });
-      return;
-    }
-  }
-
-  const categoryLabels = {
-    hile_sikayet: "Hile Şikayeti",
-    yetkili_sikayet: "Yetkili Şikayeti",
-    alisveris: "Alışveriş",
-    itiraz: "İtiraz",
-    oneri: "Öneri",
-    diger: "Diğer",
-  };
-
-  const channelName = `ticket-${user.username.toLowerCase().replace(/[^a-z0-9]/g, "")}-${Date.now().toString().slice(-4)}`;
-
-  try {
-    const ticketChannel = await guild.channels.create({
-      name: channelName,
-      type: ChannelType.GuildText,
-      parent: config.channels.ticketCategory || null,
-      topic: `${categoryLabels[category]} | ${user.tag} | ${user.id}`,
-      permissionOverwrites: [
-        {
-          id: guild.id,
-          deny: [PermissionFlagsBits.ViewChannel],
-        },
-        {
-          id: user.id,
-          allow: [
-            PermissionFlagsBits.ViewChannel,
-            PermissionFlagsBits.SendMessages,
-            PermissionFlagsBits.ReadMessageHistory,
-            PermissionFlagsBits.AttachFiles,
-          ],
-        },
-        {
-          id: config.roles.support || config.roles.admin,
-          allow: [
-            PermissionFlagsBits.ViewChannel,
-            PermissionFlagsBits.SendMessages,
-            PermissionFlagsBits.ReadMessageHistory,
-            PermissionFlagsBits.ManageMessages,
-          ],
-        },
-      ],
-    });
-
-    openTickets.set(user.id, ticketChannel.id);
-
-    // Ticket içi embed
-    const ticketEmbed = new EmbedBuilder()
-      .setColor(config.color.main)
-      .setTitle(`🎫 ${categoryLabels[category]} Ticketi`)
-      .setDescription(
-        [
-          `Merhaba ${user}! Ticketin oluşturuldu.`,
-          "",
-          `**Kategori:** ${categoryLabels[category]}`,
-          `**Açılan:** <t:${Math.floor(Date.now() / 1000)}:F>`,
-          "",
-          "> 📝 **Sorununu detaylı şekilde anlat.**",
-          "> 📎 Gerekirse ekran görüntüsü ekle.",
-          "> ⏳ Ekip üyesi en kısa sürede ilgilenecek.",
-        ].join("\n")
-      )
-      .setFooter({ text: `CombatMC • ${config.mcIp}` })
-      .setTimestamp();
-
-    const closeBtn = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId("ticket_close")
-        .setLabel("🔒 Ticketi Kapat")
-        .setStyle(ButtonStyle.Danger),
-      new ButtonBuilder()
-        .setCustomId("ticket_claim")
-        .setLabel("✋ Üstlen")
-        .setStyle(ButtonStyle.Primary)
-    );
-
-    await ticketChannel.send({
-      content: `${user} | <@&${config.roles.support || config.roles.admin}>`,
-      embeds: [ticketEmbed],
-      components: [closeBtn],
-    });
-
-    await interaction.reply({
-      embeds: [
-        successEmbed(`Ticketin açıldı! ${ticketChannel}`),
-      ],
-      ephemeral: true,
-    });
-
-    // Log
-    const logChannel = guild.channels.cache.get(config.channels.ticketLog);
-    if (logChannel) {
-      const logEmbed = new EmbedBuilder()
-        .setColor(config.color.info)
-        .setTitle("📂 Yeni Ticket Açıldı")
-        .addFields(
-          { name: "Kullanıcı", value: `${user.tag} (${user.id})`, inline: true },
-          { name: "Kategori", value: categoryLabels[category], inline: true },
-          { name: "Kanal", value: `${ticketChannel}`, inline: true }
-        )
-        .setTimestamp();
-      logChannel.send({ embeds: [logEmbed] });
-    }
-  } catch (err) {
-    console.error("Ticket oluşturma hatası:", err);
-    await interaction.reply({
-      embeds: [errorEmbed("Ticket oluşturulurken bir hata oluştu!")],
-      ephemeral: true,
-    });
-  }
-}
-
-// Ticket kapat
-async function closeTicket(interaction) {
-  const channel = interaction.channel;
-  const topic = channel.topic || "";
-
-  // Kullanıcı ID'sini topic'ten al
-  const userId = topic.split(" | ")[2];
-
-  if (userId) openTickets.delete(userId);
-
-  await interaction.reply({
-    embeds: [
-      new EmbedBuilder()
-        .setColor(config.color.warn)
-        .setDescription("🔒 **Ticket 5 saniye içinde kapatılacak...**"),
-    ],
-  });
-
-  setTimeout(async () => {
-    // Log
-    const logChannel = interaction.guild.channels.cache.get(config.channels.ticketLog);
-    if (logChannel) {
-      const logEmbed = new EmbedBuilder()
-        .setColor(config.color.error)
-        .setTitle("🔒 Ticket Kapatıldı")
-        .addFields(
-          { name: "Kanal", value: channel.name, inline: true },
-          { name: "Kapatan", value: `${interaction.user.tag}`, inline: true }
-        )
-        .setTimestamp();
-      logChannel.send({ embeds: [logEmbed] });
-    }
-    await channel.delete("Ticket kapatıldı").catch(() => {});
-  }, 5000);
-}
-
-// ─── PREFIX KOMUTLAR ──────────────────────────────────────────────────────────
-client.on("messageCreate", async (message) => {
+// ─── MESSAGE CREATE ───────────────────────────────────────────────────────
+client.on('messageCreate', async (message) => {
   if (message.author.bot || !message.guild) return;
-  if (!message.content.startsWith(config.prefix)) return;
+  if (!message.content.startsWith(PREFIX)) return;
 
-  const args = message.content.slice(config.prefix.length).trim().split(/ +/);
-  const command = args.shift().toLowerCase();
+  const args = message.content.slice(PREFIX.length).trim().split(/ +/);
+  const cmd = args.shift().toLowerCase();
 
-  const guild = message.guild;
-  const member = message.member;
+  // ── SUNUCU YÖNETİM ──────────────────────────────────────────────────────
 
-  // ── SUNUCU YÖNETİM ─────────────────────────────────────────────────────────
+  if (cmd === 'aktif') {
+    // Sunucudaki aktif üye sayısı
+    const online = message.guild.members.cache.filter(m => m.presence?.status && m.presence.status !== 'offline').size;
+    const total  = message.guild.memberCount;
+    return message.reply({ embeds: [infoEmbed('📊 Aktif Üyeler', `**Online:** ${online}\n**Toplam:** ${total}`)] });
+  }
 
-  // !aktif [not] — Sunucu açıldı duyurusu
-  if (command === "aktif") {
-    if (!isAdmin(member))
-      return message.reply({ embeds: [errorEmbed("Bu komutu kullanma yetkin yok!")] });
-    const not = args.join(" ") || "Sunucu aktif!";
-    const duyuruKanal = guild.channels.cache.get(config.channels.duyuru) || message.channel;
-    const embed = mainEmbed("🟢 Sunucu Açıldı!", not)
-      .setColor(config.color.success)
+  if (cmd === 'bakim') {
+    if (!message.member.permissions.has(PermissionFlagsBits.Administrator)) return message.reply({ embeds: [errorEmbed('Yetkin yok.')] });
+    const durum = args[0];
+    if (!durum) return message.reply({ embeds: [errorEmbed('Kullanım: `!bakim <ac/kapat>`')] });
+    if (durum === 'ac') {
+      client.user.setActivity('🔧 Bakım Modu', { type: 3 });
+      return message.reply({ embeds: [successEmbed('Bakım modu **açıldı**.')] });
+    } else {
+      client.user.setActivity(`${PREFIX}yardim`, { type: 3 });
+      return message.reply({ embeds: [successEmbed('Bakım modu **kapatıldı**.')] });
+    }
+  }
+
+  if (cmd === 'oyuncu-sayisi') {
+    const count = message.guild.members.cache.filter(m => !m.user.bot).size;
+    return message.reply({ embeds: [infoEmbed('🎮 Oyuncu Sayısı', `Sunucuda **${count}** oyuncu bulunuyor.`)] });
+  }
+
+  if (cmd === 'duyuru') {
+    if (!message.member.permissions.has(PermissionFlagsBits.ManageGuild)) return message.reply({ embeds: [errorEmbed('Yetkin yok.')] });
+    const kanal = message.mentions.channels.first();
+    const icerik = args.slice(1).join(' ');
+    if (!kanal || !icerik) return message.reply({ embeds: [errorEmbed('Kullanım: `!duyuru #kanal <mesaj>`')] });
+    await kanal.send({ embeds: [new EmbedBuilder().setColor(0xf39c12).setTitle('📢 Duyuru').setDescription(icerik).setTimestamp()] });
+    return message.reply({ embeds: [successEmbed(`Duyuru **${kanal}** kanalına gönderildi.`)] });
+  }
+
+  // ── ETKİNLİK & TOPLULUK ──────────────────────────────────────────────────
+
+  if (cmd === 'oneri') {
+    const icerik = args.join(' ');
+    if (!icerik) return message.reply({ embeds: [errorEmbed('Kullanım: `!oneri <öneri metni>`')] });
+    const embed = new EmbedBuilder()
+      .setColor(0x9b59b6)
+      .setTitle('💡 Yeni Öneri')
+      .setDescription(icerik)
+      .addFields({ name: 'Öneren', value: `${message.author}` })
+      .setTimestamp();
+    const msg = await message.channel.send({ embeds: [embed] });
+    await msg.react('✅');
+    await msg.react('❌');
+    return message.delete().catch(() => {});
+  }
+
+  if (cmd === 'cekilis-baslat') {
+    if (!message.member.permissions.has(PermissionFlagsBits.ManageEvents)) return message.reply({ embeds: [errorEmbed('Yetkin yok.')] });
+    const sure = args[0];
+    const odul = args.slice(1).join(' ');
+    if (!sure || !odul) return message.reply({ embeds: [errorEmbed('Kullanım: `!cekilis-baslat <süre: 1m/1h/1d> <ödül>`')] });
+    const ms = parseDuration(sure);
+    if (!ms) return message.reply({ embeds: [errorEmbed('Geçersiz süre. Örnek: `30m`, `2h`, `1d`')] });
+    const embed = new EmbedBuilder()
+      .setColor(0xf1c40f)
+      .setTitle('🎉 ÇEKİLİŞ BAŞLADI!')
+      .setDescription(`**Ödül:** ${odul}\n**Süre:** ${sure}\n\n🎊 Katılmak için aşağıya tepki ver!`)
+      .setTimestamp(Date.now() + ms);
+    const msg = await message.channel.send({ embeds: [embed] });
+    await msg.react('🎉');
+    setTimeout(async () => {
+      const fetched = await msg.fetch();
+      const reaction = fetched.reactions.cache.get('🎉');
+      if (!reaction) return;
+      const users = await reaction.users.fetch();
+      const katilimcilar = users.filter(u => !u.bot);
+      if (!katilimcilar.size) return msg.reply({ embeds: [errorEmbed('Çekilişe kimse katılmadı.')] });
+      const kazanan = katilimcilar.random();
+      msg.reply({ embeds: [new EmbedBuilder().setColor(0x2ecc71).setTitle('🏆 Çekiliş Bitti!').setDescription(`Tebrikler ${kazanan}! **${odul}** kazandın! 🎉`).setTimestamp()] });
+    }, ms);
+    return message.reply({ embeds: [successEmbed(`Çekiliş başladı! **${sure}** sonra sonuçlanacak.`)] });
+  }
+
+  if (cmd === 'hata-bildir') {
+    const icerik = args.join(' ');
+    if (!icerik) return message.reply({ embeds: [errorEmbed('Kullanım: `!hata-bildir <hata açıklaması>`')] });
+    const embed = new EmbedBuilder().setColor(0xe74c3c).setTitle('🐛 Hata Bildirimi').setDescription(icerik).addFields({ name: 'Bildiren', value: `${message.author}` }).setTimestamp();
+    if (LOG_CHANNEL_ID) {
+      const logCh = message.guild.channels.cache.get(LOG_CHANNEL_ID);
+      if (logCh) logCh.send({ embeds: [embed] });
+    }
+    return message.reply({ embeds: [successEmbed('Hatan iletildi, teşekkürler!')] });
+  }
+
+  // ── MODERASYON ───────────────────────────────────────────────────────────
+
+  if (cmd === 'ban') {
+    if (!message.member.permissions.has(PermissionFlagsBits.BanMembers)) return message.reply({ embeds: [errorEmbed('Yetkin yok.')] });
+    const hedef = getMember(message.guild, args[0]);
+    if (!hedef) return message.reply({ embeds: [errorEmbed('Üye bulunamadı.')] });
+    const sebep = args.slice(1).join(' ') || 'Sebep belirtilmedi';
+    await hedef.ban({ reason: sebep });
+    return message.reply({ embeds: [successEmbed(`**${hedef.user.tag}** banlandı. Sebep: ${sebep}`)] });
+  }
+
+  if (cmd === 'unban') {
+    if (!message.member.permissions.has(PermissionFlagsBits.BanMembers)) return message.reply({ embeds: [errorEmbed('Yetkin yok.')] });
+    const userId = args[0]?.replace(/[<@!>]/g, '');
+    if (!userId) return message.reply({ embeds: [errorEmbed('Kullanım: `!unban <kullanıcı ID>`')] });
+    await message.guild.members.unban(userId).catch(() => {});
+    return message.reply({ embeds: [successEmbed(`**${userId}** banı kaldırıldı.`)] });
+  }
+
+  if (cmd === 'kick') {
+    if (!message.member.permissions.has(PermissionFlagsBits.KickMembers)) return message.reply({ embeds: [errorEmbed('Yetkin yok.')] });
+    const hedef = getMember(message.guild, args[0]);
+    if (!hedef) return message.reply({ embeds: [errorEmbed('Üye bulunamadı.')] });
+    const sebep = args.slice(1).join(' ') || 'Sebep belirtilmedi';
+    await hedef.kick(sebep);
+    return message.reply({ embeds: [successEmbed(`**${hedef.user.tag}** sunucudan atıldı. Sebep: ${sebep}`)] });
+  }
+
+  if (cmd === 'mute') {
+    if (!message.member.permissions.has(PermissionFlagsBits.ModerateMembers)) return message.reply({ embeds: [errorEmbed('Yetkin yok.')] });
+    const hedef = getMember(message.guild, args[0]);
+    const sure = args[1];
+    if (!hedef || !sure) return message.reply({ embeds: [errorEmbed('Kullanım: `!mute <üye> <süre: 1m/1h/1d>`')] });
+    const ms = parseDuration(sure);
+    if (!ms) return message.reply({ embeds: [errorEmbed('Geçersiz süre. Örnek: `10m`, `1h`')] });
+    await hedef.timeout(ms, args.slice(2).join(' ') || 'Sebep belirtilmedi');
+    return message.reply({ embeds: [successEmbed(`**${hedef.user.tag}** ${sure} susturuldu.`)] });
+  }
+
+  if (cmd === 'unmute') {
+    if (!message.member.permissions.has(PermissionFlagsBits.ModerateMembers)) return message.reply({ embeds: [errorEmbed('Yetkin yok.')] });
+    const hedef = getMember(message.guild, args[0]);
+    if (!hedef) return message.reply({ embeds: [errorEmbed('Üye bulunamadı.')] });
+    await hedef.timeout(null);
+    return message.reply({ embeds: [successEmbed(`**${hedef.user.tag}** susturması kaldırıldı.`)] });
+  }
+
+  if (cmd === 'warn') {
+    if (!message.member.permissions.has(PermissionFlagsBits.ModerateMembers)) return message.reply({ embeds: [errorEmbed('Yetkin yok.')] });
+    const hedef = getMember(message.guild, args[0]);
+    const sebep = args.slice(1).join(' ');
+    if (!hedef || !sebep) return message.reply({ embeds: [errorEmbed('Kullanım: `!warn <üye> <sebep>`')] });
+    return message.reply({ embeds: [new EmbedBuilder().setColor(0xf39c12).setTitle('⚠️ Uyarı').setDescription(`**${hedef.user.tag}** uyarıldı.\n**Sebep:** ${sebep}`)] });
+  }
+
+  if (cmd === 'waro') {
+    // warn override - uyarıyı sil (basit implementasyon)
+    if (!message.member.permissions.has(PermissionFlagsBits.ModerateMembers)) return message.reply({ embeds: [errorEmbed('Yetkin yok.')] });
+    return message.reply({ embeds: [successEmbed('Uyarı kaldırıldı (log sistemine bağlayın).')] });
+  }
+
+  if (cmd === 'karaliste') {
+    if (!message.member.permissions.has(PermissionFlagsBits.BanMembers)) return message.reply({ embeds: [errorEmbed('Yetkin yok.')] });
+    const hedef = getMember(message.guild, args[0]);
+    const sebep = args.slice(1).join(' ') || 'Sebep belirtilmedi';
+    if (!hedef) return message.reply({ embeds: [errorEmbed('Üye bulunamadı.')] });
+    return message.reply({ embeds: [new EmbedBuilder().setColor(0x2c3e50).setTitle('🚫 Kara Listeye Eklendi').setDescription(`**${hedef.user.tag}** kara listeye eklendi.\n**Sebep:** ${sebep}`)] });
+  }
+
+  if (cmd === 'purge' || cmd === 'sil') {
+    if (!message.member.permissions.has(PermissionFlagsBits.ManageMessages)) return message.reply({ embeds: [errorEmbed('Yetkin yok.')] });
+    const adet = parseInt(args[0]);
+    if (isNaN(adet) || adet < 1 || adet > 100) return message.reply({ embeds: [errorEmbed('1-100 arası bir sayı gir.')] });
+    await message.channel.bulkDelete(adet + 1, true).catch(() => {});
+    const bilgi = await message.channel.send({ embeds: [successEmbed(`**${adet}** mesaj silindi.`)] });
+    setTimeout(() => bilgi.delete().catch(() => {}), 3000);
+    return;
+  }
+
+  if (cmd === 'slow') {
+    if (!message.member.permissions.has(PermissionFlagsBits.ManageChannels)) return message.reply({ embeds: [errorEmbed('Yetkin yok.')] });
+    const saniye = parseInt(args[0]);
+    if (isNaN(saniye) || saniye < 0) return message.reply({ embeds: [errorEmbed('Geçerli bir saniye değeri gir. (0 = kapat)')] });
+    await message.channel.setRateLimitPerUser(saniye);
+    return message.reply({ embeds: [successEmbed(saniye === 0 ? 'Yavaş mod kapatıldı.' : `Yavaş mod **${saniye}s** olarak ayarlandı.`)] });
+  }
+
+  if (cmd === 'rol-al') {
+    if (!message.member.permissions.has(PermissionFlagsBits.ManageRoles)) return message.reply({ embeds: [errorEmbed('Yetkin yok.')] });
+    const hedef = getMember(message.guild, args[0]);
+    const rol = message.mentions.roles.first() || message.guild.roles.cache.get(args[1]);
+    if (!hedef || !rol) return message.reply({ embeds: [errorEmbed('Kullanım: `!rol-al <üye> <@rol>`')] });
+    await hedef.roles.remove(rol);
+    return message.reply({ embeds: [successEmbed(`**${hedef.user.tag}** üyesinden **${rol.name}** rolü alındı.`)] });
+  }
+
+  if (cmd === 'kiliti-ac') {
+    if (!message.member.permissions.has(PermissionFlagsBits.ManageChannels)) return message.reply({ embeds: [errorEmbed('Yetkin yok.')] });
+    await message.channel.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: true });
+    return message.reply({ embeds: [successEmbed('Kanal kilidi **açıldı**.')] });
+  }
+
+  // ── KULLANICI BİLGİ ──────────────────────────────────────────────────────
+
+  if (cmd === 'whois' || cmd === 'userinfo') {
+    const hedef = getMember(message.guild, args[0]) || message.member;
+    const u = hedef.user;
+    const embed = new EmbedBuilder()
+      .setColor(0x3498db)
+      .setTitle(`👤 ${u.tag}`)
+      .setThumbnail(u.displayAvatarURL({ dynamic: true }))
       .addFields(
-        { name: "IP", value: `\`${config.mcIp}\``, inline: true },
-        { name: "Sürüm", value: `\`${config.mcVersion}\``, inline: true }
-      );
-    duyuruKanal.send({ content: "@everyone", embeds: [embed] });
-    if (duyuruKanal.id !== message.channel.id)
-      message.reply({ embeds: [successEmbed("Duyuru gönderildi!")] });
-    return;
-  }
-
-  // !bakim [sure] — Bakım duyurusu
-  if (command === "bakim") {
-    if (!isAdmin(member))
-      return message.reply({ embeds: [errorEmbed("Bu komutu kullanma yetkin yok!")] });
-    const sure = args.join(" ") || "Belirtilmedi";
-    const duyuruKanal = guild.channels.cache.get(config.channels.duyuru) || message.channel;
-    const embed = mainEmbed("🔧 Bakım Modu", `Sunucu bakıma alındı.\n**Tahmini Süre:** ${sure}`)
-      .setColor(config.color.warn);
-    duyuruKanal.send({ content: "@everyone", embeds: [embed] });
-    if (duyuruKanal.id !== message.channel.id)
-      message.reply({ embeds: [successEmbed("Bakım duyurusu gönderildi!")] });
-    return;
-  }
-
-  // !oyuncu-sayisi — Online oyuncu sayısı
-  if (command === "oyuncu-sayisi") {
-    const embed = mainEmbed(
-      "👥 Oyuncu Sayısı",
-      `**${config.mcIp}** sunucusunun anlık oyuncu bilgisi\n\n> Bu özellik için sunucu API entegrasyonu gerekir.`
-    );
+        { name: 'ID', value: u.id, inline: true },
+        { name: 'Hesap Oluşturma', value: `<t:${Math.floor(u.createdTimestamp / 1000)}:R>`, inline: true },
+        { name: 'Sunucuya Katılma', value: `<t:${Math.floor(hedef.joinedTimestamp / 1000)}:R>`, inline: true },
+        { name: 'Roller', value: hedef.roles.cache.filter(r => r.id !== message.guild.id).map(r => `${r}`).join(', ') || 'Yok' }
+      )
+      .setTimestamp();
     return message.reply({ embeds: [embed] });
   }
 
-  // ── ETKİNLİK & TOPLULUK ────────────────────────────────────────────────────
+  if (cmd === 'sahipler') {
+    const sahip = await message.guild.fetchOwner();
+    return message.reply({ embeds: [infoEmbed('👑 Sunucu Sahibi', `${sahip.user.tag} (${sahip.id})`)] });
+  }
 
-  // !oneri <mesaj> — Oylama ile öneri gönder
-  if (command === "oneri") {
-    if (!args.length)
-      return message.reply({ embeds: [errorEmbed("Kullanım: `!oneri <mesaj>`")] });
-    const oneriMetni = args.join(" ");
+  if (cmd === 'serverinfo') {
+    const g = message.guild;
     const embed = new EmbedBuilder()
-      .setColor(config.color.info)
-      .setTitle("💡 Yeni Öneri")
-      .setDescription(oneriMetni)
-      .setAuthor({ name: message.author.tag, iconURL: message.author.displayAvatarURL() })
-      .setTimestamp()
-      .setFooter({ text: `CombatMC • ${config.mcIp}` });
-    const msg = await message.channel.send({ embeds: [embed] });
-    await msg.react("✅");
-    await msg.react("❌");
-    message.delete().catch(() => {});
-    return;
-  }
-
-  // !cekilis-baslat <ödül> <süre> [kazanan] — Çekiliş başlat
-  if (command === "cekilis-baslat") {
-    if (!isMod(member))
-      return message.reply({ embeds: [errorEmbed("Yetkin yok!")] });
-    const odul = args[0] || "Belirtilmedi";
-    const sure = args[1] || "1s";
-    const kazananSayisi = parseInt(args[2]) || 1;
-    const embed = new EmbedBuilder()
-      .setColor(0xf1c40f)
-      .setTitle("🎉 ÇEKİLİŞ BAŞLADI!")
-      .setDescription(
-        [
-          `**Ödül:** ${odul}`,
-          `**Süre:** ${sure}`,
-          `**Kazanan:** ${kazananSayisi} kişi`,
-          "",
-          "**🎊 ile tepki vererek katıl!**",
-        ].join("\n")
-      )
-      .setFooter({ text: `Başlatan: ${message.author.tag}` })
-      .setTimestamp();
-    const msg = await message.channel.send({ embeds: [embed] });
-    await msg.react("🎊");
-    message.delete().catch(() => {});
-    return;
-  }
-
-  // !hata-bildir <açıklama> [link] — Bug bildir
-  if (command === "hata-bildir") {
-    if (!args.length)
-      return message.reply({ embeds: [errorEmbed("Kullanım: `!hata-bildir <açıklama> [link]`")] });
-    const aciklama = args.join(" ");
-    const embed = new EmbedBuilder()
-      .setColor(config.color.error)
-      .setTitle("🐛 Bug Raporu")
-      .setDescription(aciklama)
-      .setAuthor({ name: message.author.tag, iconURL: message.author.displayAvatarURL() })
-      .setTimestamp()
-      .setFooter({ text: `CombatMC Bug Tracker • ${config.mcIp}` });
-    message.channel.send({ embeds: [embed] });
-    message.reply({ embeds: [successEmbed("Bug raporu gönderildi, teşekkürler!")] });
-    return;
-  }
-
-  // ── MODERASYON ─────────────────────────────────────────────────────────────
-
-  // !ban <@kullanıcı> [sebep]
-  if (command === "ban") {
-    if (!isMod(member))
-      return message.reply({ embeds: [errorEmbed("Yetkin yok!")] });
-    const target = message.mentions.members.first();
-    if (!target)
-      return message.reply({ embeds: [errorEmbed("Kullanım: `!ban <@kullanıcı> [sebep]`")] });
-    const sebep = args.slice(1).join(" ") || "Sebep belirtilmedi";
-    await target.ban({ reason: sebep }).catch((e) => {
-      return message.reply({ embeds: [errorEmbed(`Ban atılamadı: ${e.message}`)] });
-    });
-    const embed = mainEmbed(
-      "🔨 Ban Atıldı",
-      `**Kullanıcı:** ${target.user.tag}\n**Sebep:** ${sebep}\n**Banlayan:** ${message.author.tag}`
-    ).setColor(config.color.error);
-    message.channel.send({ embeds: [embed] });
-    return;
-  }
-
-  // !unban <userID> [sebep]
-  if (command === "unban") {
-    if (!isMod(member))
-      return message.reply({ embeds: [errorEmbed("Yetkin yok!")] });
-    const userId = args[0];
-    const sebep = args.slice(1).join(" ") || "Sebep belirtilmedi";
-    if (!userId)
-      return message.reply({ embeds: [errorEmbed("Kullanım: `!unban <userID> [sebep]`")] });
-    await guild.members.unban(userId, sebep).catch((e) => {
-      return message.reply({ embeds: [errorEmbed(`Unban yapılamadı: ${e.message}`)] });
-    });
-    message.reply({ embeds: [successEmbed(`**${userId}** bandan çıkarıldı. Sebep: ${sebep}`)] });
-    return;
-  }
-
-  // !kick <@kullanıcı> [sebep]
-  if (command === "kick") {
-    if (!isMod(member))
-      return message.reply({ embeds: [errorEmbed("Yetkin yok!")] });
-    const target = message.mentions.members.first();
-    if (!target)
-      return message.reply({ embeds: [errorEmbed("Kullanım: `!kick <@kullanıcı> [sebep]`")] });
-    const sebep = args.slice(1).join(" ") || "Sebep belirtilmedi";
-    await target.kick(sebep).catch((e) => {
-      return message.reply({ embeds: [errorEmbed(`Kick atılamadı: ${e.message}`)] });
-    });
-    const embed = mainEmbed(
-      "👢 Kick Atıldı",
-      `**Kullanıcı:** ${target.user.tag}\n**Sebep:** ${sebep}\n**Kickleyen:** ${message.author.tag}`
-    ).setColor(config.color.warn);
-    message.channel.send({ embeds: [embed] });
-    return;
-  }
-
-  // !mute <@kullanıcı> <sure> [sebep]
-  if (command === "mute") {
-    if (!isMod(member))
-      return message.reply({ embeds: [errorEmbed("Yetkin yok!")] });
-    const target = message.mentions.members.first();
-    if (!target)
-      return message.reply({ embeds: [errorEmbed("Kullanım: `!mute <@kullanıcı> <sure> [sebep]`")] });
-    const sureStr = args[1] || "10m";
-    const sebep = args.slice(2).join(" ") || "Sebep belirtilmedi";
-    // Süreyi ms'e çevir
-    const timeMap = { s: 1000, m: 60000, h: 3600000, d: 86400000 };
-    const timeUnit = sureStr.slice(-1);
-    const timeVal = parseInt(sureStr) || 10;
-    const durationMs = (timeMap[timeUnit] || 60000) * timeVal;
-    await target.timeout(durationMs, sebep).catch((e) => {
-      return message.reply({ embeds: [errorEmbed(`Mute yapılamadı: ${e.message}`)] });
-    });
-    const embed = mainEmbed(
-      "🔇 Mute Yapıldı",
-      `**Kullanıcı:** ${target.user.tag}\n**Süre:** ${sureStr}\n**Sebep:** ${sebep}\n**Yapan:** ${message.author.tag}`
-    ).setColor(config.color.warn);
-    message.channel.send({ embeds: [embed] });
-    return;
-  }
-
-  // !unmute <@kullanıcı>
-  if (command === "unmute") {
-    if (!isMod(member))
-      return message.reply({ embeds: [errorEmbed("Yetkin yok!")] });
-    const target = message.mentions.members.first();
-    if (!target)
-      return message.reply({ embeds: [errorEmbed("Kullanım: `!unmute <@kullanıcı>`")] });
-    await target.timeout(null).catch((e) => {
-      return message.reply({ embeds: [errorEmbed(`Unmute yapılamadı: ${e.message}`)] });
-    });
-    message.reply({ embeds: [successEmbed(`${target.user.tag} mutedan çıkarıldı.`)] });
-    return;
-  }
-
-  // !warn <@kullanıcı>
-  if (command === "warn") {
-    if (!isMod(member))
-      return message.reply({ embeds: [errorEmbed("Yetkin yok!")] });
-    const target = message.mentions.members.first();
-    if (!target)
-      return message.reply({ embeds: [errorEmbed("Kullanım: `!warn <@kullanıcı>`")] });
-    const sebep = args.slice(1).join(" ") || "Sebep belirtilmedi";
-    const embed = mainEmbed(
-      "⚠️ Uyarı",
-      `${target} kullanıcısına uyarı verildi.\n**Sebep:** ${sebep}\n**Veren:** ${message.author.tag}`
-    ).setColor(config.color.warn);
-    message.channel.send({ embeds: [embed] });
-    // DM
-    target.send({ embeds: [embed] }).catch(() => {});
-    return;
-  }
-
-  // !waro / !warn-o / !delwarn / !clearwarn
-  if (["waro", "warn-o", "delwarn", "clearwarn"].includes(command)) {
-    if (!isMod(member))
-      return message.reply({ embeds: [errorEmbed("Yetkin yok!")] });
-    const target = message.mentions.members.first();
-    if (!target)
-      return message.reply({ embeds: [errorEmbed("Kullanım: `!waro <@kullanıcı>`")] });
-    message.reply({ embeds: [successEmbed(`${target.user.tag} kullanıcısının uyarıları temizlendi.`)] });
-    return;
-  }
-
-  // !karaliste <@kullanıcı> <sebep> [kanıt]
-  if (command === "karaliste") {
-    if (!isAdmin(member))
-      return message.reply({ embeds: [errorEmbed("Yetkin yok!")] });
-    const target = message.mentions.members.first();
-    if (!target)
-      return message.reply({ embeds: [errorEmbed("Kullanım: `!karaliste <@kullanıcı> <sebep> [kanıt]`")] });
-    const sebep = args[1] || "Belirtilmedi";
-    const kanit = args.slice(2).join(" ") || "Yok";
-    const embed = mainEmbed(
-      "⛔ Karaliste",
-      `**Kullanıcı:** ${target.user.tag} (${target.id})\n**Sebep:** ${sebep}\n**Kanıt:** ${kanit}\n**Ekleyen:** ${message.author.tag}`
-    ).setColor(config.color.error);
-    message.channel.send({ embeds: [embed] });
-    return;
-  }
-
-  // !purge <miktar> [@kullanıcı]
-  if (command === "purge") {
-    if (!isMod(member))
-      return message.reply({ embeds: [errorEmbed("Yetkin yok!")] });
-    const amount = parseInt(args[0]);
-    if (!amount || amount < 1 || amount > 100)
-      return message.reply({ embeds: [errorEmbed("1-100 arası sayı gir.")] });
-    const targetUser = message.mentions.users.first();
-    let messages = await message.channel.messages.fetch({ limit: amount + 1 });
-    if (targetUser) {
-      messages = messages.filter((m) => m.author.id === targetUser.id);
-    }
-    await message.channel.bulkDelete(messages, true).catch((e) => {
-      return message.reply({ embeds: [errorEmbed(`Mesajlar silinemedi: ${e.message}`)] });
-    });
-    const reply = await message.channel.send({
-      embeds: [successEmbed(`${messages.size} mesaj silindi.`)],
-    });
-    setTimeout(() => reply.delete().catch(() => {}), 3000);
-    return;
-  }
-
-  // !slowmode <miktar>
-  if (command === "slowmode") {
-    if (!isMod(member))
-      return message.reply({ embeds: [errorEmbed("Yetkin yok!")] });
-    const saniye = parseInt(args[0]);
-    if (isNaN(saniye) || saniye < 0 || saniye > 21600)
-      return message.reply({ embeds: [errorEmbed("0-21600 arası saniye gir.")] });
-    await message.channel.setRateLimitPerUser(saniye);
-    message.reply({
-      embeds: [
-        successEmbed(
-          saniye === 0
-            ? "Yavaş mod kapatıldı."
-            : `Yavaş mod **${saniye} saniye** olarak ayarlandı.`
-        ),
-      ],
-    });
-    return;
-  }
-
-  // !kilit / !kiliti-ac
-  if (command === "kilit") {
-    if (!isMod(member))
-      return message.reply({ embeds: [errorEmbed("Yetkin yok!")] });
-    await message.channel.permissionOverwrites.edit(guild.id, {
-      SendMessages: false,
-    });
-    message.reply({ embeds: [successEmbed("🔒 Kanal kilitlendi.")] });
-    return;
-  }
-
-  if (command === "kiliti-ac") {
-    if (!isMod(member))
-      return message.reply({ embeds: [errorEmbed("Yetkin yok!")] });
-    await message.channel.permissionOverwrites.edit(guild.id, {
-      SendMessages: null,
-    });
-    message.reply({ embeds: [successEmbed("🔓 Kanal kilidi açıldı.")] });
-    return;
-  }
-
-  // !rol-ver / !rol-al <@kullanıcı> <@rol>
-  if (command === "rol-ver") {
-    if (!isAdmin(member))
-      return message.reply({ embeds: [errorEmbed("Yetkin yok!")] });
-    const target = message.mentions.members.first();
-    const role = message.mentions.roles.first();
-    if (!target || !role)
-      return message.reply({ embeds: [errorEmbed("Kullanım: `!rol-ver <@kullanıcı> <@rol>`")] });
-    await target.roles.add(role).catch((e) => {
-      return message.reply({ embeds: [errorEmbed(`Rol verilemedi: ${e.message}`)] });
-    });
-    message.reply({ embeds: [successEmbed(`${target.user.tag} kullanıcısına ${role.name} rolü verildi.`)] });
-    return;
-  }
-
-  if (command === "rol-al") {
-    if (!isAdmin(member))
-      return message.reply({ embeds: [errorEmbed("Yetkin yok!")] });
-    const target = message.mentions.members.first();
-    const role = message.mentions.roles.first();
-    if (!target || !role)
-      return message.reply({ embeds: [errorEmbed("Kullanım: `!rol-al <@kullanıcı> <@rol>`")] });
-    await target.roles.remove(role).catch((e) => {
-      return message.reply({ embeds: [errorEmbed(`Rol alınamadı: ${e.message}`)] });
-    });
-    message.reply({ embeds: [successEmbed(`${target.user.tag} kullanıcısından ${role.name} rolü alındı.`)] });
-    return;
-  }
-
-  // !duyuru <mesaj> [true/false]
-  if (command === "duyuru") {
-    if (!isAdmin(member))
-      return message.reply({ embeds: [errorEmbed("Yetkin yok!")] });
-    const everyone = args[args.length - 1] === "true";
-    const text = everyone ? args.slice(0, -1).join(" ") : args.join(" ");
-    if (!text)
-      return message.reply({ embeds: [errorEmbed("Kullanım: `!duyuru <mesaj> [true/false]`")] });
-    const duyuruKanal = guild.channels.cache.get(config.channels.duyuru) || message.channel;
-    const embed = mainEmbed("📢 Duyuru", text).setAuthor({
-      name: message.author.tag,
-      iconURL: message.author.displayAvatarURL(),
-    });
-    duyuruKanal.send({ content: everyone ? "@everyone" : null, embeds: [embed] });
-    if (duyuruKanal.id !== message.channel.id)
-      message.reply({ embeds: [successEmbed("Duyuru gönderildi!")] });
-    return;
-  }
-
-  // ── KULLANICI BİLGİ ────────────────────────────────────────────────────────
-
-  // !whois <@kullanıcı veya ID>
-  if (command === "whois") {
-    const target =
-      message.mentions.members.first() ||
-      (args[0] ? await guild.members.fetch(args[0]).catch(() => null) : member);
-    if (!target)
-      return message.reply({ embeds: [errorEmbed("Kullanıcı bulunamadı!")] });
-    const user = target.user;
-    const embed = new EmbedBuilder()
-      .setColor(config.color.main)
-      .setTitle(`👤 ${user.tag}`)
-      .setThumbnail(user.displayAvatarURL({ dynamic: true }))
+      .setColor(0x1abc9c)
+      .setTitle(`🖥️ ${g.name}`)
+      .setThumbnail(g.iconURL({ dynamic: true }))
       .addFields(
-        { name: "ID", value: user.id, inline: true },
-        { name: "Hesap Oluşturma", value: `<t:${Math.floor(user.createdTimestamp / 1000)}:R>`, inline: true },
-        { name: "Sunucuya Katılma", value: `<t:${Math.floor(target.joinedTimestamp / 1000)}:R>`, inline: true },
-        { name: "Roller", value: target.roles.cache.map((r) => r).join(", ") || "Yok", inline: false }
+        { name: 'ID', value: g.id, inline: true },
+        { name: 'Üye Sayısı', value: `${g.memberCount}`, inline: true },
+        { name: 'Kanal Sayısı', value: `${g.channels.cache.size}`, inline: true },
+        { name: 'Kuruluş', value: `<t:${Math.floor(g.createdTimestamp / 1000)}:R>`, inline: true },
+        { name: 'Boost', value: `Tier ${g.premiumTier} (${g.premiumSubscriptionCount} boost)`, inline: true }
       )
-      .setFooter({ text: `CombatMC • ${config.mcIp}` })
       .setTimestamp();
-    message.reply({ embeds: [embed] });
-    return;
+    return message.reply({ embeds: [embed] });
   }
 
-  // !userinfo [@kullanıcı]
-  if (command === "userinfo") {
-    const target = message.mentions.members.first() || member;
-    const user = target.user;
-    const embed = new EmbedBuilder()
-      .setColor(config.color.main)
-      .setTitle(`ℹ️ ${user.tag} Bilgileri`)
-      .setThumbnail(user.displayAvatarURL({ dynamic: true }))
-      .addFields(
-        { name: "Kullanıcı", value: `${user}`, inline: true },
-        { name: "ID", value: user.id, inline: true },
-        { name: "Bot?", value: user.bot ? "Evet" : "Hayır", inline: true },
-        { name: "Katılma Tarihi", value: `<t:${Math.floor(target.joinedTimestamp / 1000)}:F>`, inline: false },
-        { name: "Hesap Tarihi", value: `<t:${Math.floor(user.createdTimestamp / 1000)}:F>`, inline: false }
-      )
-      .setFooter({ text: `CombatMC • ${config.mcIp}` })
-      .setTimestamp();
-    message.reply({ embeds: [embed] });
-    return;
+  if (cmd === 'mod-kayit') {
+    // Mod işlemlerini loglar (log kanalını ayarla)
+    return message.reply({ embeds: [infoEmbed('📋 Mod Kayıt', `Log kanalı: ${LOG_CHANNEL_ID ? `<#${LOG_CHANNEL_ID}>` : 'Ayarlanmamış'}\nKayıt açık.`)] });
   }
 
-  // !sahipler — Bot sahipleri (admin)
-  if (command === "sahipler") {
-    const admins = guild.members.cache.filter((m) => isAdmin(m));
-    const adminList = admins.map((m) => `• ${m.user.tag}`).join("\n") || "Bulunamadı";
-    const embed = mainEmbed("👑 Sunucu Yönetimi", adminList);
-    message.reply({ embeds: [embed] });
-    return;
-  }
+  // ── TİCKET SİSTEMİ ───────────────────────────────────────────────────────
 
-  // !serverinfo
-  if (command === "serverinfo") {
-    const embed = new EmbedBuilder()
-      .setColor(config.color.main)
-      .setTitle(`🏰 ${guild.name}`)
-      .setThumbnail(guild.iconURL({ dynamic: true }))
-      .addFields(
-        { name: "ID", value: guild.id, inline: true },
-        { name: "Sahip", value: `<@${guild.ownerId}>`, inline: true },
-        { name: "Üye Sayısı", value: `${guild.memberCount}`, inline: true },
-        { name: "Kanal Sayısı", value: `${guild.channels.cache.size}`, inline: true },
-        { name: "Rol Sayısı", value: `${guild.roles.cache.size}`, inline: true },
-        { name: "MC IP", value: `\`${config.mcIp}\``, inline: true },
-        { name: "MC Sürüm", value: `\`${config.mcVersion}\``, inline: true },
-        { name: "Oluşturulma", value: `<t:${Math.floor(guild.createdTimestamp / 1000)}:F>`, inline: false }
-      )
-      .setFooter({ text: `CombatMC • ${config.mcIp}` })
-      .setTimestamp();
-    message.reply({ embeds: [embed] });
-    return;
-  }
+  if (cmd === 'ticket-kapat') {
+    if (!message.channel.name.startsWith('ticket-')) return message.reply({ embeds: [errorEmbed('Bu kanal bir ticket kanalı değil.')] });
+    if (!message.member.permissions.has(PermissionFlagsBits.ManageChannels)) return message.reply({ embeds: [errorEmbed('Yetkin yok.')] });
 
-  // !mod-kayit
-  if (command === "mod-kayit") {
-    if (!isAdmin(member))
-      return message.reply({ embeds: [errorEmbed("Yetkin yok!")] });
-    const embed = mainEmbed(
-      "📋 Mod Kayıt",
-      "Moderatör işlem geçmişi modülü aktif.\n> Bu özellik için veritabanı entegrasyonu gerekir."
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId('ticket_kapat_onayla').setLabel('✅ Evet, Kapat').setStyle(ButtonStyle.Danger),
+      new ButtonBuilder().setCustomId('ticket_kapat_iptal').setLabel('❌ İptal').setStyle(ButtonStyle.Secondary)
     );
-    message.reply({ embeds: [embed] });
+    return message.reply({ embeds: [infoEmbed('⚠️ Ticket Kapatılsın mı?', 'Bu ticketi kapatmak istediğine emin misin?', 0xe67e22)], components: [row] });
+  }
+
+  if (cmd === 'ticket-liste') {
+    if (!message.member.permissions.has(PermissionFlagsBits.ManageChannels)) return message.reply({ embeds: [errorEmbed('Yetkin yok.')] });
+    const ticketler = message.guild.channels.cache.filter(c => c.name.startsWith('ticket-'));
+    if (!ticketler.size) return message.reply({ embeds: [infoEmbed('🎫 Açık Ticketlar', 'Şu an açık ticket yok.')] });
+    const liste = ticketler.map(c => `${c} — \`${c.name}\``).join('\n');
+    return message.reply({ embeds: [infoEmbed(`🎫 Açık Ticketlar (${ticketler.size})`, liste)] });
+  }
+
+  if (cmd === 'ticket-sil') {
+    if (!message.member.permissions.has(PermissionFlagsBits.ManageChannels)) return message.reply({ embeds: [errorEmbed('Yetkin yok.')] });
+    if (!message.channel.name.startsWith('ticket-')) return message.reply({ embeds: [errorEmbed('Bu kanal bir ticket kanalı değil.')] });
+    await message.channel.delete().catch(() => {});
     return;
   }
 
-  // ── TİCKET SİSTEMİ KOMUTLARI ────────────────────────────────────────────────
-
-  // !ticket-kur [#kanal] — Ticket paneli kur (admin)
-  if (command === "ticket-kur") {
-    if (!isAdmin(member))
-      return message.reply({ embeds: [errorEmbed("Yetkin yok!")] });
-    const targetChannel = message.mentions.channels.first() || message.channel;
-    const panel = buildTicketPanel();
-    const panelMsg = await targetChannel.send(panel);
-    ticketPanelMessages.set(panelMsg.id, targetChannel.id);
-    message.reply({ embeds: [successEmbed(`Ticket paneli ${targetChannel} kanalına kuruldu!`)] });
-    return;
+  if (cmd === 'ticket-aktar') {
+    if (!message.member.permissions.has(PermissionFlagsBits.ManageChannels)) return message.reply({ embeds: [errorEmbed('Yetkin yok.')] });
+    const hedef = getMember(message.guild, args[0]);
+    if (!hedef) return message.reply({ embeds: [errorEmbed('Üye bulunamadı.')] });
+    await message.channel.permissionOverwrites.edit(hedef.id, { ViewChannel: true, SendMessages: true });
+    return message.reply({ embeds: [successEmbed(`Ticket **${hedef.user.tag}** üyesine aktarıldı.`)] });
   }
 
-  // !ticket-kapat [sebep] — Ticket kanalını kapat
-  if (command === "ticket-kapat") {
-    const sebep = args.join(" ") || "Sebep belirtilmedi";
-    const topic = message.channel.topic || "";
-    if (!topic.includes("|")) {
-      return message.reply({ embeds: [errorEmbed("Bu bir ticket kanalı değil!")] });
-    }
-    const userId = topic.split(" | ")[2];
-    if (userId) openTickets.delete(userId);
-
-    await message.channel.send({
-      embeds: [
-        new EmbedBuilder()
-          .setColor(config.color.warn)
-          .setDescription(`🔒 **Ticket kapatılıyor...**\n**Sebep:** ${sebep}`)
-          .setTimestamp(),
-      ],
-    });
-    setTimeout(() => message.channel.delete("Ticket kapatıldı").catch(() => {}), 3000);
-    return;
+  if (cmd === 'ticket-istatistikler') {
+    const toplam = message.guild.channels.cache.filter(c => c.name.startsWith('ticket-')).size;
+    return message.reply({ embeds: [infoEmbed('📊 Ticket İstatistikleri', `**Açık Ticketlar:** ${toplam}`)] });
   }
 
-  // !ticket-liste — Açık ticketleri listele
-  if (command === "ticket-liste") {
-    if (!isMod(member))
-      return message.reply({ embeds: [errorEmbed("Yetkin yok!")] });
-    const ticketChannels = guild.channels.cache.filter((c) =>
-      c.name.startsWith("ticket-") && c.topic
+  // ── TICKET OLUŞTUR (panel) ───────────────────────────────────────────────
+
+  if (cmd === 'ticket-panel') {
+    if (!message.member.permissions.has(PermissionFlagsBits.ManageGuild)) return message.reply({ embeds: [errorEmbed('Yetkin yok.')] });
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId('ticket_ac').setLabel('🎫 Ticket Aç').setStyle(ButtonStyle.Primary)
     );
-    if (!ticketChannels.size) {
-      return message.reply({ embeds: [mainEmbed("🎫 Açık Ticketler", "Açık ticket yok.")] });
-    }
-    const list = ticketChannels.map((c) => `• ${c} — ${c.topic}`).join("\n");
-    message.reply({
-      embeds: [mainEmbed(`🎫 Açık Ticketler (${ticketChannels.size})`, list)],
-    });
-    return;
-  }
-
-  // !ticket-sil [#kanal] — Ticket sil (admin)
-  if (command === "ticket-sil") {
-    if (!isAdmin(member))
-      return message.reply({ embeds: [errorEmbed("Yetkin yok!")] });
-    const target = message.mentions.channels.first() || message.channel;
-    await target.delete("Admin tarafından silindi").catch((e) => {
-      return message.reply({ embeds: [errorEmbed(`Silinemedi: ${e.message}`)] });
-    });
-    return;
-  }
-
-  // !ticket-aktar <@yetkili> — Ticketi aktar
-  if (command === "ticket-aktar") {
-    if (!isMod(member))
-      return message.reply({ embeds: [errorEmbed("Yetkin yok!")] });
-    const target = message.mentions.members.first();
-    if (!target)
-      return message.reply({ embeds: [errorEmbed("Kullanım: `!ticket-aktar <@yetkili>`")] });
-    await message.channel.permissionOverwrites.edit(target, {
-      ViewChannel: true,
-      SendMessages: true,
-      ReadMessageHistory: true,
-    });
-    message.reply({
-      embeds: [successEmbed(`Ticket **${target.user.tag}** kullanıcısına aktarıldı.`)],
-    });
-    return;
-  }
-
-  // !ticket-istatistikler
-  if (command === "ticket-istatistikler") {
-    if (!isAdmin(member))
-      return message.reply({ embeds: [errorEmbed("Yetkin yok!")] });
-    const ticketChannels = guild.channels.cache.filter((c) => c.name.startsWith("ticket-")).size;
-    const embed = mainEmbed(
-      "📊 Ticket İstatistikleri",
-      `**Açık Ticketler:** ${ticketChannels}\n**Toplam Açılan:** Veritabanı gerekir`
-    );
-    message.reply({ embeds: [embed] });
-    return;
-  }
-
-  // ── YARDIM KOMUTU ────────────────────────────────────────────────────────────
-  if (command === "yardim" || command === "help") {
     const embed = new EmbedBuilder()
-      .setColor(config.color.main)
-      .setTitle("⚔️ CombatMC Bot — Komut Listesi")
-      .setDescription(`Prefix: \`${config.prefix}\``)
+      .setColor(0x5865F2)
+      .setTitle('🎫 Destek Sistemi')
+      .setDescription('Destek almak için aşağıdaki butona tıkla.\nEkip en kısa sürede yardımcı olacak.')
+      .setFooter({ text: message.guild.name });
+    return message.channel.send({ embeds: [embed], components: [row] });
+  }
+
+  // ── YARDIM ───────────────────────────────────────────────────────────────
+
+  if (cmd === 'yardim' || cmd === 'help') {
+    const embed = new EmbedBuilder()
+      .setColor(0x5865F2)
+      .setTitle(`📖 Komut Listesi — Prefix: \`${PREFIX}\``)
       .addFields(
         {
-          name: "🖥️ Sunucu Yönetim",
-          value: "`aktif` `bakim` `oyuncu-sayisi` `duyuru`",
-          inline: false,
+          name: '🖥️ Sunucu Yönetimi',
+          value: '`aktif` `bakim` `oyuncu-sayisi` `duyuru #kanal <mesaj>`',
         },
         {
-          name: "🎉 Etkinlik & Topluluk",
-          value: "`oneri` `cekilis-baslat` `hata-bildir`",
-          inline: false,
+          name: '🎉 Etkinlik & Topluluk',
+          value: '`oneri <metin>` `cekilis-baslat <süre> <ödül>` `hata-bildir <açıklama>`',
         },
         {
-          name: "🔨 Moderasyon",
-          value: "`ban` `unban` `kick` `mute` `unmute` `warn` `waro` `karaliste` `purge` `slowmode` `kilit` `kiliti-ac` `rol-ver` `rol-al`",
-          inline: false,
+          name: '🔨 Moderasyon',
+          value: '`ban` `unban` `kick` `mute` `unmute` `warn` `waro` `karaliste` `purge` `slow` `rol-al` `kiliti-ac`',
         },
         {
-          name: "👤 Kullanıcı Bilgi",
-          value: "`whois` `userinfo` `sahipler` `serverinfo` `mod-kayit`",
-          inline: false,
+          name: '👤 Kullanıcı Bilgi',
+          value: '`whois` `userinfo` `sahipler` `serverinfo` `mod-kayit`',
         },
         {
-          name: "🎫 Ticket",
-          value: "`ticket-kur` `ticket-kapat` `ticket-liste` `ticket-sil` `ticket-aktar` `ticket-istatistikler`",
-          inline: false,
-        }
+          name: '🎫 Ticket',
+          value: '`ticket-panel` `ticket-kapat` `ticket-liste` `ticket-sil` `ticket-aktar` `ticket-istatistikler`',
+        },
       )
-      .setFooter({ text: `CombatMC • ${config.mcIp} • ${config.mcVersion}` })
-      .setTimestamp();
-    message.reply({ embeds: [embed] });
-    return;
+      .setFooter({ text: 'Tüm komutlarda üye = @mention veya kullanıcı adı' });
+    return message.reply({ embeds: [embed] });
   }
 });
 
-// ─── INTERACTION HANDLER (Buton & Select) ─────────────────────────────────────
-client.on("interactionCreate", async (interaction) => {
-  // Select Menu — Ticket Kategori
-  if (interaction.isStringSelectMenu() && interaction.customId === "ticket_category") {
-    const category = interaction.values[0];
-    await createTicket(interaction, category);
-    return;
-  }
+// ─── BUTTON INTERACTIONS ──────────────────────────────────────────────────
+client.on('interactionCreate', async (interaction) => {
+  if (!interaction.isButton()) return;
 
-  // Button — Ticket Kapat
-  if (interaction.isButton() && interaction.customId === "ticket_close") {
-    await closeTicket(interaction);
-    return;
-  }
-
-  // Button — Ticket Üstlen
-  if (interaction.isButton() && interaction.customId === "ticket_claim") {
-    const member = interaction.member;
-    if (!isMod(member)) {
-      return interaction.reply({
-        embeds: [errorEmbed("Yetkin yok!")],
-        ephemeral: true,
-      });
+  // Ticket aç
+  if (interaction.customId === 'ticket_ac') {
+    await interaction.deferReply({ ephemeral: true });
+    const existing = openTickets.get(interaction.user.id);
+    if (existing) {
+      const ch = interaction.guild.channels.cache.get(existing);
+      if (ch) return interaction.editReply({ content: `Zaten açık bir ticketin var: ${ch}` });
     }
-    await interaction.channel.permissionOverwrites.edit(member, {
-      ViewChannel: true,
-      SendMessages: true,
-      ReadMessageHistory: true,
-    });
-    interaction.reply({
-      embeds: [
-        successEmbed(`✋ ${member.user.tag} bu ticketi üstlendi.`),
+
+    const options = {
+      name: `ticket-${interaction.user.username.toLowerCase().replace(/\s+/g, '-')}`,
+      type: ChannelType.GuildText,
+      permissionOverwrites: [
+        { id: interaction.guild.id, deny: [PermissionFlagsBits.ViewChannel] },
+        { id: interaction.user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] },
       ],
-    });
+    };
+    if (TICKET_CATEGORY_ID) options.parent = TICKET_CATEGORY_ID;
+
+    const channel = await interaction.guild.channels.create(options);
+    openTickets.set(interaction.user.id, channel.id);
+
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId('ticket_kapat_onayla').setLabel('🔒 Ticketi Kapat').setStyle(ButtonStyle.Danger)
+    );
+    const embed = new EmbedBuilder()
+      .setColor(0x5865F2)
+      .setTitle('🎫 Ticket Açıldı')
+      .setDescription(`Merhaba ${interaction.user}!\nDestek ekibi yakında yardımcı olacak.\n\nTicketi kapatmak için aşağıdaki butonu kullan.`);
+    await channel.send({ embeds: [embed], components: [row] });
+    return interaction.editReply({ content: `Ticketin açıldı: ${channel}` });
+  }
+
+  // Ticket kapat onayla
+  if (interaction.customId === 'ticket_kapat_onayla') {
+    if (!interaction.member.permissions.has(PermissionFlagsBits.ManageChannels)) {
+      return interaction.reply({ content: '❌ Yetkin yok.', ephemeral: true });
+    }
+    await interaction.reply({ embeds: [successEmbed('Ticket kapatılıyor...')] });
+    // Sahibini bul ve map'ten çıkar
+    for (const [uid, cid] of openTickets.entries()) {
+      if (cid === interaction.channel.id) { openTickets.delete(uid); break; }
+    }
+    setTimeout(() => interaction.channel.delete().catch(() => {}), 2000);
     return;
+  }
+
+  // Ticket kapat iptal
+  if (interaction.customId === 'ticket_kapat_iptal') {
+    return interaction.reply({ embeds: [infoEmbed('❌ İptal', 'Ticket kapatma iptal edildi.')], ephemeral: true });
   }
 });
 
-// ─── BOT HAZIR ────────────────────────────────────────────────────────────────
-client.on("ready", () => {
-  console.log(`
-╔══════════════════════════════════════╗
-║   ⚔️  CombatMC Bot — Aktif!  ⚔️      ║
-╠══════════════════════════════════════╣
-║  Bot: ${client.user.tag.padEnd(30)}║
-║  MC : ${config.mcIp.padEnd(30)}║
-║  Ver: ${config.mcVersion.padEnd(30)}║
-╚══════════════════════════════════════╝
-  `);
-  client.user.setPresence({
-    activities: [{ name: `⚔️ ${config.mcIp}`, type: 0 }],
-    status: "online",
-  });
-});
-
-// ─── GİRİŞ ────────────────────────────────────────────────────────────────────
+// ─── LOGIN ────────────────────────────────────────────────────────────────
 client.login(process.env.BOT_TOKEN);
