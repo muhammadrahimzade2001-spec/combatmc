@@ -39,8 +39,8 @@ function saveCounter() { fs.writeFileSync(COUNTER_FILE, JSON.stringify({ count: 
 const TICKET_CATEGORIES = [
   { id: 'genel',    label: 'Genel Destek',    emoji: '💬', desc: 'Genel sorular için',         color: 0x5865F2 },
   { id: 'satin',    label: 'Satın Alma',       emoji: '🛒', desc: 'Satın alma & ödeme sorunları',color: 0x2ecc71 },
-  { id: 'sikayet',  label: 'Şikayet',          emoji: '⚠️', desc: 'Kullanıcı şikayeti bil.',    color: 0xe74c3c },
-  { id: 'ortak',    label: 'Ortaklık',         emoji: '🤝', desc: 'İş birliği & ortaklık tekl.',color: 0xf39c12 },
+  { id: 'sikayet',  label: 'Şikayet',          emoji: '⚠️', desc: 'Kullanıcı şikayeti bildir.',    color: 0xe74c3c },
+  { id: 'ortak',    label: 'Ortaklık',         emoji: '🤝', desc: 'İş birliği & ortaklık teklifi.',color: 0xf39c12 },
   { id: 'teknik',   label: 'Teknik Destek',    emoji: '🔧', desc: 'Teknik sorunlar için',       color: 0x1abc9c },
 ];
 
